@@ -47,6 +47,7 @@ def add_active(df, file_name):
     return df
 
 
+
 def setup(PATH='/mnt/aoni04/katayama/DATA2020', dense_flag=False, elan_flag=False):
     gaze_files = sorted(glob.glob(os.path.join(PATH, 'img_middle64/*npy')))
     img_middle_feature_files = sorted(glob.glob(os.path.join(PATH, 'spec/*npy')))
