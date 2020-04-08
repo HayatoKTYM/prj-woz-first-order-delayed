@@ -46,14 +46,38 @@ def u_t_maxcut(u, max_frame=30):
     return u
 
 
+def make_target(df):
+    """
+    systemno顔向きを encode
+    A......0
+    B......1
+    A -> B, B -> A ... 2 (人の顔が映っていない)
+    これらを one-hot で エンコード
+
+    return target [Aをみている, Bをみている, どちらも見ていない]
+    """
+    a = df['target'].map(lambda x: 0 if x == 'A' else 1).values
+    index = df['action_detail']=='look'
+    a[index] = 1
+    index = np.where(a==1)[0]
+    #print('before',a.sum())
+    for i in index:
+        a[i:i+3] = 1.
+    #print('after',a.sum())
+
+    return np.identity(3)[a]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', type=str, default='/mnt/aoni04/katayama/DATA2020/')
     parser.add_argument('-d', '--discrete', type=int, default=0,
                         help='mode is 0(discrete) or 1(countinous)')
+    parser.add_argument('-t', '--target_type', type=str, default='False',
+                        hrlp='if True, target shape is 3(A,B,unknown), False is 1(A/B)')
     parser.add_argument('-o', '--out', type=str, default='./DISCRETE')
     parser.add_argument('-w', '--u_PATH', type=str,
-     default='../u_t/SPEC/../u_t/SPEC/202004021729/epoch_21_acc0.909_loss0.218_ut_train.pth')
+    default='../u_t/SPEC/SPEC/202004021729/epoch_21_acc0.909_loss0.218_ut_train.pth')
     parser.add_argument('-e', '--epoch', type=int, default=100)
     parser.add_argument('-r', '--resume', type=str, default=True)
     parser.add_argument('--hang', type=str, default=False)
@@ -68,11 +92,11 @@ def main():
     os.makedirs(out, exist_ok=True)
 
     df_list = setup(PATH=args.input, dense_flag=False)
-    train_id = 89
+    train_id = 100
     # 連結せずに 会話毎に list でもつ
-    df_train = df_list[13:train_id-74]
+    df_train = df_list[13:train_id]
     feature = []
-    df_val = df_list[train_id:91]
+    df_val = df_list[train_id:]
     feature_val = []
     
     df_dict = {'train': df_train, 'val': df_val}
@@ -83,23 +107,26 @@ def main():
         feature = dataloaders_dict[phase]
 
         for i in range(len(df)):
-            x = df[i].iloc[:, -512:].values
+            x = df[i].iloc[:, -512-64:].values
             u = hang_over(np.clip(1.0 - (df[i]['utter_A'] + df[i]['utter_B']), 0, 1))
-            target = df[i]['target'].map(lambda x: 0 if x == 'A' else 1).values
-            target = target.reshape(len(target), 1)
+            if not args.target_type:
+                target = df[i]['target'].map(lambda x: 0 if x == 'A' else 1).values
+                target = target.reshape(len(target), 1)
+            else:
+                target = make_target(df[i])
             y = df[i]['action'].map(lambda x: 0.8 if x == 'Passive' else 0.8 if x == 'Active' else 0).values
             y[u == 0] = 0.
-            #x = np.append(target, x, axis=1)
+            x = np.append(target, x, axis=1)
             feature.append((x, u, y))
-
+    print('x shape is {}'.format(x.shape))
     if args.discrete == 0:
         net = FirstDelayActionPredict_VAD(
-            input_size=512,
+            input_size=512+64+3,
             hidden_size=64,
             mode='concat')
     else:
         net = FirstDelayActionPredict_ut_model(
-            input_size=512,
+            input_size=512+64+3,
             hidden_size=64,
             PATH=args.u_PATH,
             lstm_model=True)
