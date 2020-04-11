@@ -108,13 +108,13 @@ def main():
 
         for i in range(len(df)):
             x = df[i].iloc[:, -512-64:].values
-            u = hang_over(np.clip(1.0 - (df[i]['utter_A'] + df[i]['utter_B']), 0, 1))
+            u = hang_over((1 - df[i]['utter_A'].values) * (1 - df[i]['utter_B'].values))
             if not args.target_type:
                 target = df[i]['target'].map(lambda x: 0 if x == 'A' else 1).values
                 target = target.reshape(len(target), 1)
             else:
                 target = make_target(df[i])
-            y = df[i]['action'].map(lambda x: 0.8 if x == 'Passive' else 0.8 if x == 'Active' else 0).values
+            y = df[i]['action'].map(lambda x: 0.8 if x in ['Active','Passive'] else 0)
             y[u == 0] = 0.
             x = np.append(target, x, axis=1)
             feature.append((x, u, y))
